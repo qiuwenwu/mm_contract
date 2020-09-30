@@ -1,0 +1,37 @@
+{
+  "name": "mm_contract",
+  "version": "1.0.0",
+  "description": "这是超级美眉智能合约调用辅助模块，用于快速发布合约和调用区块链ABI方法，适用于eth和tron。",
+  "main": "index.js",
+  "scripts": {
+    "test": "node ./demo/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qiuwenwu/mm_contract.git"
+  },
+  "keywords": [
+    "MM",
+    "超级美眉",
+    "区块链",
+    "智能合约",
+    "浏览器钱包",
+    "ETH",
+    "TRON",
+    "以太坊",
+    "波场",
+    "发布",
+    "调用ABI",
+    "Contract"
+  ],
+  "author": "邱文武（qiuwenwu）",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/qiuwenwu/mm_contract/issues"
+  },
+  "homepage": "https://github.com/qiuwenwu/mm_contract#readme",
+  "dependencies": {
+    "bignumber": "^1.1.0",
+    "web3": "^1.3.0"
+  }
+}

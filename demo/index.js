@@ -19,14 +19,13 @@ async function test(){
 	
 	// 查询余额
 	var balance = await mm.get_balance();
-	console.log(balance);
-	console.log(web3.utils);
-	var hex = web3.utils.toHex({name:12});
-	console.log(hex);
+	console.log('当前余额', balance);
+	var hex = mm.toHex({name:12});
+	console.log('对象转哈希', hex);
 	
 	var obj = mm.toObj(hex);
-	console.log(obj);
-	console.log(mm.toHash("123"));
+	console.log('哈希转对象', obj);
+	console.log(mm.toHash("666"));
 }
 
 test();

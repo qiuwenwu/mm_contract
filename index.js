@@ -16,18 +16,22 @@ class mm_contract {
 		 * @property {String} host 连接地址
 		 * @property {String} contract_address 合约地址
 		 * @property {String} account_address 默认账户地址
-		 * @property {Number} GasLimit 手续费上限
+		 * @property {Number} gasLimit 手续费上限
 		 * @property {Number} chain_accuracy 主链计算精度，默认以太坊18位小数 1 ether = 10^16 wei
 		 * @property {Number} token_accuracy 代币计算精度，默认18位小数
 		 */
 		this.config = Object.assign({
 			chain: "eth",
 			host: "http://localhost:8545",
+			chainId: 128,
 			contract_address: "",
 			account_address: "",
-			GasLimit: 0,
+			gasLimit: 0,
 			chain_accuracy: 18,
-			token_accuracy: 18
+			token_accuracy: 18,
+			gas: 0,
+			gas_add: 20000,
+			abi: []
 		}, config);
 
 		/**
@@ -44,6 +48,16 @@ class mm_contract {
 		 * 以太坊web3.eth
 		 */
 		this.web3 = null;
+
+		/**
+		 * 合约
+		 */
+		this.contract = {};
+
+		/**
+		 * 方法集合
+		 */
+		this.methods = {};
 	}
 }
 
@@ -53,8 +67,11 @@ class mm_contract {
 mm_contract.prototype.init = function() {
 	var {
 		chain,
-		host
+		host,
+		abi,
+		contract_address
 	} = this.config;
+	var web3;
 	if (typeof web3 !== 'undefined') {
 		web3 = new Web3(web3.currentProvider);
 	} else {
@@ -62,16 +79,68 @@ mm_contract.prototype.init = function() {
 		web3 = new Web3(new Web3.providers.HttpProvider(host));
 	}
 	this.web3 = web3;
+	if (abi.length) {
+		this.contract = new this.web3.eth.Contract(abi, contract_address);
+	}
 	return this.web3;
 };
 
+/**
+ * 呼叫
+ * @param {String} method 方法
+ * @param {Object} param 参数
+ * @return {Object} 返回查询结果
+ */
+mm_contract.prototype.call = async function(method, ...param) {
+	var ret;
+	if (this.contract) {
+		if (this.contract.methods[method]) {
+			var {
+				account_address,
+				gasLimit
+			} = this.config;
+			ret = await this.contract.methods[method](...param).call({
+				from: account_address,
+				gasLimit
+			});
+		} else {
+			console.error(method + "方法不存在！");
+		}
+	}
+	return ret;
+};
+
+/**
+ * 推送
+ * @param {String} method 方法
+ * @param {Object} param 参数
+ * @return {Object} 返回推送结果
+ */
+mm_contract.prototype.send = async function(method, ...param) {
+	var ret;
+	if (this.contract) {
+		if (this.contract.methods[method]) {
+			var {
+				account_address,
+				gasLimit
+			} = this.config;
+			ret = await this.contract.methods[method](...param).send({
+				from: account_address,
+				gasLimit
+			});
+		} else {
+			console.error(method + "方法不存在！");
+		}
+	}
+	return ret;
+};
 
 /**
  * 获取以太网上的账户
  * @return {Array} 账户数组
  */
 mm_contract.prototype.get_account = async function() {
-	this.default_address = web3.eth.defaultAccount;
+	this.default_address = this.web3.eth.defaultAccount;
 	return this.default_address;
 };
 
@@ -80,10 +149,10 @@ mm_contract.prototype.get_account = async function() {
  * @return {Array} 账户数组
  */
 mm_contract.prototype.get_accounts = async function() {
-	var accounts = await web3.eth.getAccounts();
+	var accounts = await this.web3.eth.getAccounts();
 	if (accounts.length) {
-		web3.eth.defaultAccount = accounts[0];
-		this.default_address = web3.eth.defaultAccount;
+		this.web3.eth.defaultAccount = accounts[0];
+		this.default_address = this.web3.eth.defaultAccount;
 	}
 	return accounts;
 };
@@ -120,7 +189,7 @@ mm_contract.prototype.get_balance = async function(address) {
  * @param {Object} data 要转换的值
  * @return {String} 16进制字符串
  */
-mm_contract.prototype.toHex = function(data){
+mm_contract.prototype.toHex = function(data) {
 	return this.web3.utils.toHex(data);
 };
 
@@ -130,7 +199,7 @@ mm_contract.prototype.toHex = function(data){
  * @param {String} str 要转换的值
  * @return {Object} 对象
  */
-mm_contract.prototype.toObj = function(str){
+mm_contract.prototype.toObj = function(str) {
 	return this.web3.utils.hexToUtf8(str);
 };
 
@@ -140,7 +209,7 @@ mm_contract.prototype.toObj = function(str){
  * @param {String} str 要转换的值
  * @return {String} 哈希字符串
  */
-mm_contract.prototype.toHash = function(str){
+mm_contract.prototype.toHash = function(str) {
 	return this.web3.utils.sha3(str);
 };
 

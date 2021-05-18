@@ -28,7 +28,11 @@ async function test() {
 	
 	var ret = await mm.call("getNFTsOf", "0x404f94B549A7538dd403986FBd2C92a8Cff122Bf");
 	console.log(ret);
+	var balance = await mm.get_balance("0x404f94B549A7538dd403986FBd2C92a8Cff122Bf");
+	console.log(balance);
 	
+	var ret_post = await mm.send("approve", "0xe7b4856fE12B4f008a6a347c33a14E9564a051B2", 1000000000000000);
+	console.log(ret_post);
 	// console.log(contract.methods.balanceOf("0x404f94B549A7538dd403986FBd2C92a8Cff122Bf").call());
 	// var chain = contract.at(config.contract_address);
 	// console.log(chain);

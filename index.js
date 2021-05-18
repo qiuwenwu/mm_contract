@@ -69,6 +69,7 @@ mm_contract.prototype.init = function() {
 		chain,
 		host,
 		abi,
+		account_address,
 		contract_address
 	} = this.config;
 	var web3;
@@ -77,10 +78,13 @@ mm_contract.prototype.init = function() {
 	} else {
 		// set the provider you want from Web3.providers
 		web3 = new Web3(new Web3.providers.HttpProvider(host));
+		web3.eth.defaultAccount = account_address;
 	}
+	console.log(web3.eth.defaultAccount)
 	this.web3 = web3;
 	if (abi.length) {
 		this.contract = new this.web3.eth.Contract(abi, contract_address);
+		Object.assign(this.methods, this.contract.methods);
 	}
 	return this.web3;
 };
@@ -167,20 +171,22 @@ mm_contract.prototype.get_balance = async function(address) {
 		chain_accuracy
 	} = this.config;
 	var y = Math.pow(10, chain_accuracy);
-	var balance = 0;
-	if (address) {
-		var num_str = await this.web3.getBalance(address);
-		var num_b = new BigNumber(num_str);
-		balance = num_b.div(y).toNumber();
-	} else {
-		if (!this.default_address) {
-			await this.get_accounts();
-		}
-		var num_str = await this.web3.eth.getBalance(this.default_address);
-		var num_b = new BigNumber(num_str);
-		balance = num_b.div(y).toNumber();
-		this.balance = balance;
+	
+	if (!this.default_address) {
+		await this.get_accounts();
 	}
+	
+	if (!address) {
+		address = this.default_address;
+	}
+	// 查询余额
+	var num_str = await this.web3.eth.getBalance(address);
+	// 转为大数字类型
+	var num_b = new BigNumber(num_str);
+	// 除以小数位
+	var balance = num_b.div(y).toNumber();
+	// 保存余额
+	this.balance = balance;
 	return balance;
 };
 
@@ -193,7 +199,6 @@ mm_contract.prototype.toHex = function(data) {
 	return this.web3.utils.toHex(data);
 };
 
-
 /**
  * 将16进制字符串转回对象
  * @param {String} str 要转换的值
@@ -202,7 +207,6 @@ mm_contract.prototype.toHex = function(data) {
 mm_contract.prototype.toObj = function(str) {
 	return this.web3.utils.hexToUtf8(str);
 };
-
 
 /**
  * 转为哈希字符串

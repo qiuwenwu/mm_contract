@@ -1,107 +1,350 @@
-"use strict";
+require("mm_logs");
+const Web3 = require("web3");
+const BigNumber = require("bignumber.js");
 
-function mm_eth(config) {
-	this.config = Object.assign({
-		// 0x6132808224420bb702e2f6d342f2ac7214818593
-		contract_address: "",
-		// 0xdCF92d05f4BcdAC8cb3135E0C9FE755C4fA5C64B
-		chainId: 3,
-		precision: 100000000,
-		gas: 0,
-		gas_add: 20000
-	}, config);
+var pdr;
 
-	/**
-	 *当前用户的钱包地址
-	 */
-	this.address = "";
-	/**
-	 * 当前账户余额
-	 */
-	this.balance = 0;
+class MM_eth {
+	constructor(config) {
+		this.config = Object.assign({
+			defaultAccount: '0xF4Df46425a6689e170E2D6306aa5389A42ae1062',
+			chainId: 97,
+			chainName: "BSC",
+			symbol: "BNB",
+			decimals: 18,
+			gas: 0,
+			gas_add: 100000,
+			coin: {
+			  address: "0x226d4E1eA7f203d1908bae3D4D65CbAaa4f7aB94",
+			  name: "CDTC",
+			  symbol: "CDTC",
+			  image: null,
+			  decimals: 18
+			},
+			precision: Math.pow(10, 18),
+			rpc: {
+				// 以太坊 Ethereum 主网络
+				"1": "https://mainnet.infura.io/v3/dff1613e70d445b8bf5dcd060ac9a9eb",
+				// Ropsten 测试网络
+				"3": "https://ropsten.infura.io/v3/dff1613e70d445b8bf5dcd060ac9a9eb",
+				// Kovan 测试网络
+				"42": "https://kovan.infura.io/v3/dff1613e70d445b8bf5dcd060ac9a9eb",
+				// BSC币安智能链
+				"38": "https://bsc-dataseed.binance.org/",
+				// BSC币安智能链
+				"56": "https://bsc-dataseed.binance.org/",
+				// BSC币安智能链
+				"97": "https://bsc.elins.cn/",
+				// Heco链
+				"128": "https://http-mainnet.hecochain.com",
+				// 本地测试链
+				"545": "http://localhost:8545"
+				// ...
+			}
+		}, config);
 
-	/**
-	 * 方法集合
-	 */
-	this.methods = {};
+		/**
+		 * 事件集合
+		 */
+		this.list_event = {};
+		
+		this.list_count = 0;
+
+		/**
+		 * 地址
+		 */
+		this.address = "";
+
+		/**
+		 * 当前账户余额
+		 */
+		this.balance = 0;
+	}
 }
 
 /**
- * 调用事件
- * @param {事件名称} name
- * @param {参数} param
- * @return {Object} 返回执行结果
+ * 新建驱动
  */
-mm_eth.prototype.event = function(name, param) {
-	return null;
+MM_eth.prototype.new_provider = function() {
+	var host = this.config.rpc[this.config.chainId];
+	// 使用web3来进行区块链接口的调用
+	var web3 = new Web3();
+	web3.setProvider(new Web3.providers.HttpProvider(host));
+	web3.eth.defaultAccount = this.config.defaultAccount;
+	return web3;
 };
 
 /**
- * 处理以太函数
+ * 登录
+ * @param {String} way 登录
+ * @return {String} 地址
  */
-mm_eth.prototype.handle_ethereum = function() {
-	if (ethereum) {
-		ethereum.autoRefreshOnNetworkChange = false;
-		if (ethereum.isMetaMask) {
-			console.log('ethereum successfully detected!');
-		} else {
-			console.log('Please install MetaMask!');
-		}
-		// Access the decentralized web!
-	} else {
-		console.log('Please install MetaMask!');
+MM_eth.prototype.login = async function(way) {
+	if (!pdr) {
+		var provider = this.new_provider();
+		pdr = provider;
 	}
+	this.web3 = pdr;
+	if (!this.web3.toBigNumber) {
+		this.web3.toBigNumber = function(val) {
+			return new BigNumber(val);
+		}
+	}
+
+	if (!this.address) {
+		var accounts = await this.web3.eth.accounts;
+		this.address = accounts[0] || this.config.defaultAccount;
+	}
+	return this.address;
+}
+
+/**
+ * 构建连接
+ * @param {Object} Type
+ */
+MM_eth.prototype.link = async function(type) {
+  var dict = this[type];
+  var abi = this.config[type + "_abi"];
+  for (var k in dict) {
+    var o = dict[k];
+    o.contract = new this.web3.eth.Contract(abi, o.address + "");
+  }
 };
 
 /**
  * 初始化
  */
-mm_eth.prototype.init = function() {
-	if (window.ethereum) {
-		this.handle_ethereum();
-	} else {
-		window.addEventListener('ethereum#initialized', () => {
-			this.handle_ethereum()
-		}, {
-			once: true
+MM_eth.prototype.init_abi = async function() {
+	for (var k in this.config) {
+		if (k.indexOf("_abi") !== -1) {
+			await this.link(k.replace("_abi", ""));
+		}
+	}
+}
+
+/**
+ * 初始化
+ * @param {String} way 登录方式
+ * @return {String} 返回地址
+ */
+MM_eth.prototype.init = async function(way) {
+	await this.login(way);
+	await this.init_abi();
+	return this.web3;
+};
+
+/**
+ * 发送
+ * @param {String} type 类型
+ * @param {String} name 登录方式
+ * @param {String} method ABI方法
+ * @param {Number} value 数值
+ * @param {Array} param 参数集合
+ * @return {String}  返回地址
+ */
+MM_eth.prototype.send = async function(type, name, method, value, ...param) {
+	console.log("send req", type, name, method, value, ...param);
+	try {
+		var res = await this[type][name].contract.methods[method](...param).send({
+			from: this.address,
+			gasLimit: this.config.gas,
+			value: value
 		});
-		// If the event is not dispatched by the end of the timeout,
-		// the user probably doesn't have MetaMask installed.
-		setTimeout(() => {
-			this.handle_ethereum();
-		}, 3000); // 3 seconds
+		console.log("send res", type, name, method, res);
+	} catch (err) {
+		console.error(method, err);
 	}
+	console.log("send res", name, method, res);
+	return res;
 };
 
 /**
- * 账户改变时
- * @param {Array} accounts 账户数组
+ * 查询
+ * @param {String} name 登录方式
+ * @param {String} method ABI方法
+ * @param {Number} value 数值
+ * @param {Array} param 参数集合
+ * @return {String} 返回地址
  */
-mm_eth.prototype.accountsChanged = function(accounts) {
-	if (accounts.length) {
-		this.address = accounts[0];
+MM_eth.prototype.call = async function(type, name, method, value, ...param) {
+	if (!this.address) {
+		await this.init();
+	}
+	console.log("call req", type, name, method, ...param);
+	try {
+		var res = await this[type][name].contract.methods[method](...param).call({
+			from: this.address
+		});
+	} catch (err) {
+		console.error(method, err);
+	}
+	// console.log("call res", name, method, res);
+	return res;
+};
+
+
+/**
+ * 事件管理器
+ * @param {String} name 事件名称
+ * @param {String} accounts 账号组
+ * @param {Number} chainId 区块链频道
+ */
+MM_eth.prototype.event_after = function(name, accounts, chainId) {
+	// console.log(name);
+};
+
+/**
+ * 事件管理器
+ * @param {String} name 事件名称
+ * @param {String} accounts 账号组
+ * @param {Number} chainId 区块链频道
+ */
+MM_eth.prototype.event = function(name, accounts, chainId) {
+  console.log("event:", name, accounts, chainId);
+  if (accounts && accounts.length) {
+    this.address = pdr.selectedAddress || accounts[0];
+  }
+  if (!chainId) {
+    this.chainId = chainId;
+  } else if (!this.chainId) {
+    this.chainId = this.chainId || this.config.chainId;
+  }
+  switch (name) {
+    case "session_update":
+    case "connect":
+    case "connected":
+    case "accountsChanged":
+      if (this.address && pdr.isConnected && pdr.isConnected()) {
+        this.is_connected = pdr.isConnected();
+      } else {
+        this.is_connected = false;
+      }
+      break;
+    case "disconnect":
+      this.is_connected = false;
+      this.address = "";
+      this.balance = 0;
+      break;
+    case "chainChanged":
+      if (this.address && pdr.isConnected && pdr.isConnected()) {
+        this.is_connected = pdr.isConnected();
+      } else {
+        this.is_connected = false;
+      }
+      break;
+  }
+
+  var list = this.list_event;
+  for (var k in list) {
+    var o = list[k];
+    try {
+      o(name, this.address, this.chainId);
+    } catch (e) {
+      console.log(e);
+    }
+  }
+  this.event_after(name, accounts, this.chainId);
+};
+
+/**
+ * 执行供应器
+ * @param {Object} provider
+ */
+MM_eth.prototype.subscribe_event = function(provider) {
+	if (!provider) {
+		return;
+	}
+	// Subscribe to accounts change
+	provider.on("accountsChanged", (accounts) => {
+		this.event("accountsChanged", accounts)
+	});
+
+	// Subscribe to chainId change
+	provider.on("chainChanged", (chainId) => {
+		this.event("chainChanged", null, this.toChage_10(chainId, 1))
+	});
+
+	/**
+	 * 发起交易的时候会触发这个事件
+	 */
+	provider.on("session_update", async (error, payload) => {
+		if (error) {
+			throw error;
+		}
+		const {
+			chainId,
+			accounts
+		} = payload.params[0];
+		this.event("session_update", accounts, this.toChage_10(chainId, 1));
+	});
+
+	/**
+	 * 连接时
+	 */
+	provider.on("connect", (error, payload) => {
+		if (error) {
+			throw error;
+		}
+		const {
+			chainId,
+			accounts
+		} = payload;
+		console.log("连接成功");
+		console.log(chainId, accounts);
+		console.log(Object.keys(payload));
+		this.event('connect', accounts, this.toChage_10(chainId, 1));
+	});
+
+	/**
+	 * 断开连接时
+	 */
+	provider.on("disconnect", (error, payload) => {
+		if (error) {
+			throw error;
+		}
+		this.event('disconnect');
+	});
+};
+
+/**
+ * 转10进制
+ * @param {String} num 数值
+ * @param {Number} map 精度
+ * @return {String} 转换结果
+ */
+MM_eth.prototype.toChage_10 = function(value, map) {
+	if (value) {
+		return parseInt(value.replace('0x', ''), 16) / (map || this.config.precision);
 	} else {
-		this.address = '';
+		return 0;
 	}
-
-	this.event('accountsChanged', accounts);
 };
 
 /**
- * 字符串转16进制
- * @param {String} str
- * @return {String} 返回16进制值
+ * 新建合约连接器
+ * @param {String} name 名称
+ * @param {String} address 合约地址
+ * @param {Array} abi ABI方法集合
+ * @return {Object} 返回连接后的对象
  */
-mm_eth.prototype.toHex = function(str) {
-	if (str === "") return "";
-	var hexCharCode = [];
-	hexCharCode.push("0x");
-
-	for (var i = 0; i < str.length; i++) {
-		hexCharCode.push(str.charCodeAt(i).toString(16));
+MM_eth.prototype.new = function(name, abi, address) {
+	if (!this[name]) {
+		this[name] = new this.web3.eth.Contract(abi, address);
 	}
+	return this[name];
+};
 
-	return hexCharCode.join("");
+/**
+ * 转16进制
+ * @param {String} num 数值
+ * @param {Number} map 精度
+ * @return {String} 转换结果
+ */
+MM_eth.prototype.toChage_16 = function(num, map) {
+	if (typeof(num) === "string") {
+		return num;
+	}
+	return '0x' + (num * (map || this.config.precision)).toString(16);
 };
 
 /**
@@ -109,7 +352,7 @@ mm_eth.prototype.toHex = function(str) {
  * @param {String} value 需要补零的字符串
  * @return {String} 补零后的字符串
  */
-mm_eth.prototype.full_zore = function(value) {
+MM_eth.prototype.full_zore = function(value) {
 	var len = 64 - value.length;
 	var val = "";
 
@@ -121,327 +364,323 @@ mm_eth.prototype.full_zore = function(value) {
 };
 
 /**
- * 转16进制
- * @param {String} num 数值
- * @param {Number} map 精度
- * @return {String} 转换结果
- */
-mm_eth.prototype.toChage_16 = function(num, map) {
-	return '0x' + (num * (map || this.config.precision)).toString(16);
-};
-
-/**
- * 转10进制
- * @param {String} num 数值
- * @param {Number} map 精度
- * @return {String} 转换结果
- */
-mm_eth.prototype.toChage_10 = function(value, map) {
-	return parseInt(value.replace('0x', ''), 16) / (map || this.config.precision);
-};
-
-/**
  * 转为参数
  * @param {String} name 请求方法名称
  * @param {Array} param 请求参数集合
  * @return {Object} 返回参数
  */
-mm_eth.prototype.to_param = function(name) {
+MM_eth.prototype.to_param = function(name, ...param) {
 	var code = this.methods[name];
 	var data = code;
-
-	for (var i = 0; i < (arguments.length <= 1 ? 0 : arguments.length - 1); i++) {
-		var o = i + 1 < 1 || arguments.length <= i + 1 ? undefined : arguments[i + 1];
-
-		if (typeof o == 'string') {
+	for (var i = 0; i < param.length; i++) {
+		var o = param[i];
+		if (typeof(o) == 'string') {
 			data += this.full_zore(o.replace('0x', ''));
-		} else if (typeof o == 'number') {
+		} else if (typeof(o) == 'number') {
 			data += this.full_zore(this.toChage_16(o, 1).replace('0x', ''));
 		}
 	}
 
 	return {
-		to: this.config.contract_address,
-		// 必需，合同发布期间除外 Required except during contract publications.
-		from: this.address,
-		// 发送地址 must match user's active address.
-		data: data,
-		// '0x7f7465737432000000000000000000000000000000000000000000000000000000600057', // 可选，但用于定义智能合约的创建和交互 Optional, but used for defining smart contract creation and interaction.
-		chainId: this.config.chainId // 用于防止跨区块链的事务重用，由MetaMask自动填充 Used to prevent transaction reuse across blockchains. Auto-filled by MetaMask.
+		to: this.config.contract_address, // 必需，合同发布期间除外 Required except during contract publications.
+		from: this.address, // 发送地址 must match user's active address.
+		data: data, // '0x7f7465737432000000000000000000000000000000000000000000000000000000600057', // 可选，但用于定义智能合约的创建和交互 Optional, but used for defining smart contract creation and interaction.
+		// chainId: this.chainId || this.config.chainId, // 用于防止跨区块链的事务重用，由MetaMask自动填充 Used to prevent transaction reuse across blockchains. Auto-filled by MetaMask.
 	};
 };
 
 /**
- * 获取手续费
+ * 获取 nonce
  */
-mm_eth.prototype.get_gas = async function(param) {
-	var ret = await ethereum.request({
-		method: "eth_estimateGas",
-		params: [param]
-	});
-
-	if (this.config.gas_add) {
-		var fee = this.toChage_10(ret, 1) + this.config.gas_add;
-		return this.toChage_16(fee, 1);
-	} else {
-		return ret;
-	}
-};
-
-/**
- * 推送 —— 发送到链上
- * @param {String} name 方法名
- * @param {String} value 数值
- * @param {Array} param 参数
- */
-mm_eth.prototype.send = async function(name, value) {
-	for (var _len = arguments.length, param = new Array(_len > 2 ? _len - 2 : 0), _key = 2; _key < _len; _key++) {
-		param[_key - 2] = arguments[_key];
-	}
-
-	var pm = this.to_param.apply(this, [name].concat(param));
-	var _this$config = this.config,
-		gas = _this$config.gas,
-		chainId = _this$config.chainId;
-
-	if (gas) {
-		pm.gas = this.toChage_16(gas, 1);
-	} else if (chainId == 1) {
-		pm.gas = await this.get_gas();
-	} else {
-		pm.gas = this.toChage_16(400000, 1);
-	}
-
-	if (value) {
-		// 仅需要从初始外部帐户向以太币发送以太币。Only required to send ether to the recipient from the initiating external account.
-		pm.value = this.toChage_16(value, 1);
-	}
-	console.log('call req', pm);
-	var res = await this.req('eth_sendTransaction', [pm]);
-	console.log('send res', res);
-	return this.toChage_10(res, 1);
-};
-
-
-/**
- * 呼叫 —— 接收到本地
- * @param {String} name 方法名
- * @param {String} value 数值
- * @param {Array} param 参数
- */
-mm_eth.prototype.call = async function(name, value) {
-	for (var _len2 = arguments.length, param = new Array(_len2 > 2 ? _len2 - 2 : 0), _key2 = 2; _key2 < _len2; _key2++) {
-		param[_key2 - 2] = arguments[_key2];
-	}
-
-	var pm = this.to_param.apply(this, [name].concat(param));
-
-	if (value) {
-		pm.value = this.toChage_16(value, 1);
-	}
-	console.log('call req', pm);
-	try {
-		var res = await this.req('eth_call', [pm]);
-
-		if (res == '0x') {
-			res = '0x00';
+MM_eth.prototype.get_nonce = async function() {
+	var nonce_online = await this.web3.eth.getTransactionCount(this.web3.eth.defaultAccount || this.address);
+	var key = "wr_nonce";
+	var nonce = this.nonce;
+	if (nonce) {
+		nonce++;
+		if (nonce < nonce_online) {
+			nonce = nonce_online;
 		}
-
-		return this.toChage_10(res, 1);
-	} catch (e) {
-		console.log("错误", e);
+	} else {
+		nonce = nonce_online;
 	}
+	this.nonce = nonce;
+	return nonce;
 };
 
 /**
- * 转到合约地址
- * @param {String} form_address 发送地址
- * @param {String} to_address 接收地址
- * @param {Number} amount 转账金额
- * @param {String} value 数值
- * @return {object} 返回执行结果
+ * 转账
+ * @param {String} type 类型
+ * @param {String} name 名称
+ * @param {String} method 合约方法
+ * @param {Number} value 转账数量
+ * @param {Array} 合约传参
+ * @return {Object} 成功返回转账结果, 否则返回空
  */
-mm_eth.prototype.trade = async function(form_address, to_address, amount) {
-	var value = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : '0x00';
+MM_eth.prototype.sendS = async function(type, name, method, value, ...param) {
+	let address_my = this.web3.eth.defaultAccount || this.address;
 
-	if (!to_address) {
-		to_address = this.config.contract_address;
+	if (!this[type]) {
+		console.error("合约类型不正确");
+		return
+	}
+	if (!this[type][name]) {
+		console.error("合约不正确");
+		return
+	}
+	if (!this[type][name].contract.methods[method]) {
+		console.error("函数不存在！");
+		return
 	}
 
-	var code = "0xa9059cbb";
-	var addr = to_address.replace('0x', '');
-	var data = code + this.full_zore(addr) + this.full_zore(this.toChage_16(amount).replace('0x', ''));
-	var pm = {
-		to: to_address || this.config.contract_address,
-		// 必需，合同发布期间除外 Required except during contract publications.
-		from: form_address,
-		// 发送地址 must match user's active address.
-		value: value,
-		data: data,
-		// '0x7f7465737432000000000000000000000000000000000000000000000000000000600057', // 可选，但用于定义智能合约的创建和交互 Optional, but used for defining smart contract creation and interaction.
-		chainId: this.config.chainId // 用于防止跨区块链的事务重用，由MetaMask自动填充 Used to prevent transaction reuse across blockchains. Auto-filled by MetaMask.
+	let data = await this[type][name].contract.methods[method](...param).encodeABI();
+	var contract_address = this[type][name].address;
 
+
+	var nonce = await this.get_nonce();
+
+	var rawTx = {
+		// from: address_my,
+		nonce,
+		// eth用 0x14F46B0400, bsc用 0x12A05F200
+		gasPrice: "0x12A05F200",
+		gasLimit: '0x249F0',
+		to: contract_address,
+		// 调用receiveEth 给合约转入0.1eth ，如果调用合约方法不给合约转入eth，这个值是0
+		value: value ? this.toChage_16(value) : '0x0',
+		// 这个数据需要自己拼接，在gitee/gkai/metamask里面有方法(通过encodeABI可以不用自己拼接了)
+		data
 	};
 
-	if (this.config.gas) {
-		pm.gas = this.toChage_16(this.config.gas, 1);
-	} else {
-		pm.gas = await this.get_gas();
+	// console.info("数据", rawTx);
+	var sign_data = await this.web3.eth.accounts.signTransaction(rawTx, this.config.private_key);
+	if (!sign_data) {
+		console.error("签名失败", rawTx, err);
+		return null;
 	}
-
-	if (value) {
-		pm.value = value; // 仅需要从初始外部帐户向以太币发送以太币。Only required to send ether to the recipient from the initiating external account.
-	}
-
-	console.log('trade req', pm);
-
+	// console.info("签名", sign_data);
+	// $.sleep(1000);
+	var tx = null;
 	try {
-		var res = await this.req('eth_sendTransaction', [pm]);
-		return this.toChage_10(res, 1);
-	} catch (e) {
-		console.log("错误", e);
+		tx = await this.web3.eth.sendSignedTransaction(sign_data.rawTransaction);
+	} catch (err) {
+		console.error("链上交易超时", rawTx, err);
 	}
+	// console.info("广播", tx);
+	if (tx) {
+		if (!tx.status) {
+			this.nonce = 0;
+			return null;
+		}
+	} else {
+		this.nonce -= 1
+	}
+
+	console.log('send res', name, tx);
+	return tx;
+};
+
+
+
+/** 追加 **/
+/**
+ * call obj
+ * @param {String} name Login Method
+ * @param {String} method ABI method
+ * @param {Array} keys object prop
+ * @param {Array} param parameter set
+ * @return {String} return address
+ */
+MM_eth.prototype.callObj = async function(type, name, method, keys, ...param) {
+  console.log("call req", type, name, method, ...param);
+  try {
+    var res = await this[type][name].contract.methods[method](...param).call({
+      from: this.address
+    });
+  } catch (err) {
+    console.error(method, err)
+  }
+  var arr = res.split('_');
+  var obj = {};
+  for(var i = 0; i < keys.length; i++){
+    obj[keys[i]] = arr.length > i ? arr[i] : 0;
+  }
+  console.log("call res", name, method, obj);
+  return obj;
 };
 
 /**
- * 转到合约地址
- * @param {String} name 方法名
- * @param {Array} param 参数
- * @return {}
+ * call list
+ * @param {String} name Login Method
+ * @param {String} method ABI method
+ * @param {Array} keys object prop
+ * @param {Array} param parameter set
+ * @return {String} return address
  */
-mm_eth.prototype.get_balance = async function(address) {
-	var pm = this.to_param('balance', address);
-	pm.from = address;
-	var res = await this.req('eth_call', [pm]);
-	var balance = 0;
+MM_eth.prototype.callList = async function(type, name, method, keys, ...param) {
+  console.log("call req", type, name, method, ...param);
+  try {
+    var res = await this[type][name].contract.methods[method](...param).call({
+      from: this.address
+    });
+  } catch (err) {
+    console.error(method, err)
+  }
+  var list = res.map((o) => {
+      var arr = o.split('_');
+      var obj = {};
+      for(var i = 0; i < keys.length; i++){
+        obj[keys[i]] = arr.length > i ? arr[i] : 0;
+      }
+      return obj
+  });
+  console.log("call res", name, method, list);
+  return list;
+};
 
-	if (res) {
-		balance = this.toChage_10(res.replace('0x', ''));
+/**
+ * Add event
+ * @param {Function} name event name
+ * @param {Function} func event method
+ * @returns {Funtion} this event function key
+ */
+MM_eth.prototype.add_event = function(func, name) {
+  if (!name) {
+    this.list_count++;
+    name = this.list_count;
+  }
+  this.list_event[name] = func;
+  return name;
+};
+
+/**
+ * Delete event
+ * @param {Function} name event name
+ */
+MM_eth.prototype.del_event = function(name) {
+  delete this.list_event[name];
+};
+
+/**
+ * execute provider
+ * @param {Object} provider
+ */
+MM_eth.prototype.subscribe_event = function(provider) {
+  if (!provider) {
+    return;
+  }
+  // Subscribe to accounts change
+  provider.on("accountsChanged", (accounts) => {
+    this.event("accountsChanged", accounts)
+  });
+
+  // Subscribe to chainId change
+  provider.on("chainChanged", (chainId) => {
+    this.event("chainChanged", null, this.toChage_10(chainId, 1))
+  });
+
+  /**
+   * This event is fired when a transaction is initiated
+   */
+  provider.on("session_update", async (error, payload) => {
+    if (error) {
+      throw error;
+    }
+    const {
+      chainId,
+      accounts
+    } = payload.params[0];
+    this.event("session_update", accounts, this.toChage_10(chainId, 1));
+  });
+
+  /**
+   * when connected
+   */
+  provider.on("connect", (error, payload) => {
+    if (error) {
+      throw error;
+    }
+    if (!payload) {
+      return;
+    }
+    const {
+      chainId,
+      accounts
+    } = payload;
+    this.event('connect', accounts, this.toChage_10(chainId, 1));
+  });
+
+  /**
+   * when disconnected
+   */
+  provider.on("disconnect", (error, payload) => {
+    if (error) {
+      throw error;
+    }
+    this.event('disconnect');
+  });
+};
+
+/**
+ *  Web3 签名加密
+ *  @param {String} content 签名内容
+ *  @param {String} address 签名地址
+ *  @param {Function} func 回调函数(可选)
+ */
+MM_eth.prototype.sign = async function(content, address, func) {
+  var ret = null;
+  if (func) {
+    this.web3.eth.sign(content, address, func);
+  } else {
+    ret = await this.web3.eth.sign(content, address);
+  }
+  return ret;
+}
+
+MM_eth.prototype.get_balance = async function(address) {
+	var {
+		chain_accuracy
+	} = this.config;
+	var y = Math.pow(10, chain_accuracy);
+	
+	if (!this.default_address) {
+		await this.get_accounts();
 	}
-
+	
+	if (!address) {
+		address = this.default_address;
+	}
+	// 查询余额
+	var num_str = await this.web3.eth.getBalance(address);
+	// 转为大数字类型
+	var num_b = new BigNumber(num_str);
+	// 除以小数位
+	var balance = num_b.div(y).toNumber();
+	// 保存余额
 	this.balance = balance;
-	return this.balance;
+	return balance;
 };
 
 /**
- * 警示
- * @param {String} message 消息内容
- * @param {String} type
+ * 获取以太网上的账户
+ * @return {Array} 账户数组
  */
-mm_eth.prototype.alert = async function(message) {
-	var type = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "error";
-	console.log(message, type);
+MM_eth.prototype.get_account = async function() {
+	this.default_address = this.web3.eth.defaultAccount;
+	return this.default_address;
 };
 
 /**
- * 请求
- * @param {String} method 方法
- * @param {Array} params 参数
- * @param {Funciton} func 回调函数
- * @return {Object} 执行结果
+ * 获取以太网上的账户
+ * @return {Array} 账户数组
  */
-mm_eth.prototype.req = async function() {
-	var _this2 = this;
-
-	var method = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'eth_accounts';
-	var params = arguments.length > 1 ? arguments[1] : undefined;
-	var func = arguments.length > 2 ? arguments[2] : undefined;
-
-	if (!params) {
-		params = {};
+MM_eth.prototype.get_accounts = async function() {
+	var accounts = await this.web3.eth.getAccounts();
+	if (accounts.length) {
+		this.web3.eth.defaultAccount = accounts[0];
+		this.default_address = this.web3.eth.defaultAccount;
 	}
-
-	if (!params.gas) {
-		if (this.config.gas) {
-			params.gas = this.toChage_16(this.config.gas, 1);
-		} else {
-			params.gas = await this.get_gas();
-		}
-	}
-
-	if (ethereum.request) {
-		if (func) {
-			ethereum.request({
-				method: method,
-				params: params
-			}).then(function(res) {
-				func(res);
-			}).catch(function(error) {
-				if (error.code === 4001) {
-					// EIP-1193 userRejectedRequest error
-					_this2.alert('Please connect to MetaMask.');
-				} else {
-					_this2.alert(error);
-				}
-			});
-		} else {
-			return await ethereum.request({
-				method: method,
-				params: params
-			});
-		}
-	} else {
-		if (func) {
-			ethereum.send({
-				method: method,
-				params: params
-			}).then(function(res) {
-				func(res);
-			}).catch(function(error) {
-				if (error.code === 4001) {
-					// EIP-1193 userRejectedRequest error
-					_this2.alert('Please connect to MetaMask.');
-				} else {
-					_this2.alert(error);
-				}
-			});
-		} else {
-			return await ethereum.send({
-				method: method,
-				params: params
-			});
-		}
-	}
+	return accounts;
 };
 
-/**
- * 获取账户
- */
-mm_eth.prototype.get_accounts = async function() {
-	return await this.req("eth_requestAccounts");
-};
-
-/**
- * 获取地址
- */
-mm_eth.prototype.login = async function() {
-	var res = await this.req("eth_requestAccounts");
-
-	if (res && res.length) {
-		var address = res[0];
-		this.address = address;
-		return this.address;
-	}
-};
-
-/**
- * 是否已登录
- * @return {object} 执行结果
- * @return {Boolean} 登录成功返回true, 失败返回false
- */
-mm_eth.prototype.isLink = function() {};
-
-/**
- * 获取地址
- */
-mm_eth.prototype.get_address = function() {
-	var address = ethereum.selectedAddress;
-
-	if (address) {
-		this.address = address;
-	}
-
-	return this.address;
-};
-
-module.exports = mm_eth;
+module.exports = MM_eth;

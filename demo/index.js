@@ -1,5 +1,5 @@
 var mm_contract = require('../index.js');
-var abi = require('./nft-abi.js');
+var nft_abi = require('./abi/nft.js');
 
 /**
  * 调用合约所需配置
@@ -7,32 +7,36 @@ var abi = require('./nft-abi.js');
  * @property {String} user_address 用户地址
  */
 var config = {
-	// chain: "HT",
-	contract_address: "0xe7b4856fE12B4f008a6a347c33a14E9564a051B2",
 	account_address: "0x404f94B549A7538dd403986FBd2C92a8Cff122Bf",
-	host: "https://http-mainnet.hecochain.com",
-	chainId: 128,
-	abi
+	chainId: 97,
+	chainName: "BSC",
+	nft_abi
 };
 
 /**
  * 测试方法
  */
 async function test() {
-	var mm = new mm_contract(config);
-	var web3 = mm.init();
+	var ct = new mm_contract(config);
+	var web3 = ct.init();
+	
+	ct.nft = {
+		"TEST": {
+			address: "0xe7b4856fE12B4f008a6a347c33a14E9564a051B2"
+		}
+	}
 	
 	// var contract = new web3.eth.Contract(abi, config.contract_address);
 	// var ret = await contract.methods.getNFTsOf("0x404f94B549A7538dd403986FBd2C92a8Cff122Bf").call();
 	// console.log(ret);
 	
-	var ret = await mm.call("getNFTsOf", "0x404f94B549A7538dd403986FBd2C92a8Cff122Bf");
+	var ret = await ct.call("nft", "TEST", "getNFTsOf", "0x404f94B549A7538dd403986FBd2C92a8Cff122Bf");
 	console.log(ret);
-	var balance = await mm.get_balance("0x404f94B549A7538dd403986FBd2C92a8Cff122Bf");
-	console.log(balance);
+	// var balance = await ct.get_balance("0x404f94B549A7538dd403986FBd2C92a8Cff122Bf");
+	// console.log(balance);
 	
-	var ret_post = await mm.send("approve", "0xe7b4856fE12B4f008a6a347c33a14E9564a051B2", 1000000000000000);
-	console.log(ret_post);
+	// var ret_post = await ct.send("nft", "TEST", "approve", "0xe7b4856fE12B4f008a6a347c33a14E9564a051B2", 1000000000000000);
+	// console.log(ret_post);
 	// console.log(contract.methods.balanceOf("0x404f94B549A7538dd403986FBd2C92a8Cff122Bf").call());
 	// var chain = contract.at(config.contract_address);
 	// console.log(chain);

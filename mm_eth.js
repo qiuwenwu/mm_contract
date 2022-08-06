@@ -683,4 +683,13 @@ MM_eth.prototype.get_accounts = async function() {
 	return accounts;
 };
 
+/**
+ * 加载ABI
+ * @param {String} path 地址
+ * @return {String} 加载成功返回true
+ */
+MM_eth.prototype.load_abi = function(path){
+	
+}
+
 module.exports = MM_eth;

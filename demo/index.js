@@ -1,5 +1,4 @@
 var mm_contract = require('../index.js');
-var nft_abi = require('./abi/nft.js');
 
 /**
  * 调用合约所需配置
@@ -9,8 +8,7 @@ var nft_abi = require('./abi/nft.js');
 var config = {
 	account_address: "0x404f94B549A7538dd403986FBd2C92a8Cff122Bf",
 	chainId: 97,
-	chainName: "BSC",
-	nft_abi
+	chainName: "BSC"
 };
 
 /**
